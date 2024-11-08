@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const Database = require('better-sqlite3');
 const bcrypt = require('bcrypt');
+
 const path = require('path');
 const app = express();
 

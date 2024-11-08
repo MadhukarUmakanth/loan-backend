@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
-const Database = require('better-sqlite3');
-const bcrypt = require('bcrypt');
+const sqlite3 = require('sqlite3').verbose();  // Switch to sqlite3 for compatibility
+const bcrypt = require('bcryptjs');  // Switch to bcryptjs
 
 const path = require('path');
 const app = express();
@@ -10,20 +10,16 @@ app.use(cors());
 app.use(express.json());
 
 const dbPath = path.join(__dirname, "addusers.db");
-let db;
 
 // Initialize Database
-const initializeDB = () => {
-    try {
-        db = new Database(dbPath); // Correct initialization for better-sqlite3
-        console.log("Connected to the SQLite database.");
-    } catch (error) {
-        console.error(`DB Error: ${error.message}`);
+const db = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+        console.error("DB Error:", err.message);
         process.exit(1);
+    } else {
+        console.log("Connected to the SQLite database.");
     }
-};
-
-initializeDB();
+});
 
 // Use PORT environment variable, default to 5001 if not set
 const PORT = process.env.PORT || 5001;
@@ -33,35 +29,44 @@ app.listen(PORT, '0.0.0.0', () => {
 
 // Signup Route
 app.post("/signup", (req, res) => {
-    try {
-        const { username, email, password } = req.body;
+    const { username, email, password } = req.body;
 
-        const selectUserQuery = `SELECT * FROM users WHERE username = ?;`;
-        const dbUser = db.prepare(selectUserQuery).get(username);
+    const selectUserQuery = `SELECT * FROM users WHERE username = ?;`;
+    db.get(selectUserQuery, [username], (err, dbUser) => {
+        if (err) {
+            console.error("Error selecting user:", err);
+            return res.status(500).send("Internal Server Error");
+        }
 
         if (!dbUser) {
             const hashedPassword = bcrypt.hashSync(password, 10);
             const addUserQuery = `
                 INSERT INTO users (username, password, email)
-                VALUES (?, ?, ?);`;
-            db.prepare(addUserQuery).run(username, hashedPassword, email); // Running the prepared statement
-            res.status(201).send("User added successfully");
+                VALUES (?, ?, ?);
+            `;
+            db.run(addUserQuery, [username, hashedPassword, email], function (err) {
+                if (err) {
+                    console.error("Error adding user:", err);
+                    return res.status(500).send("Internal Server Error");
+                }
+                res.status(201).send("User added successfully");
+            });
         } else {
             res.status(400).send("User already exists");
         }
-    } catch (error) {
-        console.error("Error during signup:", error);
-        res.status(500).send("Internal Server Error");
-    }
+    });
 });
 
 // Login Route
 app.post("/login", (req, res) => {
     const { username, password } = req.body;
 
-    try {
-        const selectUserQuery = `SELECT * FROM users WHERE username = ?;`;
-        const dbUser = db.prepare(selectUserQuery).get(username);
+    const selectUserQuery = `SELECT * FROM users WHERE username = ?;`;
+    db.get(selectUserQuery, [username], (err, dbUser) => {
+        if (err) {
+            console.error("Error during login:", err);
+            return res.status(500).json({ message: "Internal Server Error" });
+        }
 
         if (!dbUser) {
             return res.status(400).json({ message: "Invalid User!" });
@@ -74,10 +79,7 @@ app.post("/login", (req, res) => {
         } else {
             return res.status(400).json({ message: "Invalid Password!" });
         }
-    } catch (error) {
-        console.error("Error during login:", error);
-        res.status(500).json({ message: "Internal Server Error" });
-    }
+    });
 });
 
 // Loan Request Route
@@ -87,12 +89,10 @@ app.post('/loans', (req, res) => {
     // Assume the user ID is fetched from an authenticated session or token
     const user_id = 1;  // Set a default user ID, or dynamically fetch from a session/token
 
-    // Check that all fields are provided
     if (user_id === undefined || amount === undefined || weeks === undefined) {
         return res.status(400).json({ message: 'Missing required fields' });
     }
 
-    // Ensure data is in the correct format
     const parsedUserId = Number(user_id);
     const parsedAmount = Number(amount);
     const parsedWeeks = Number(weeks);
@@ -101,24 +101,21 @@ app.post('/loans', (req, res) => {
         return res.status(400).json({ message: 'Invalid data types provided' });
     }
 
-    // Use db.prepare() to prepare the query and db.run() to execute it
     const insertLoanQuery = `
         INSERT INTO loanlist (user_id, amount, weeks, state)
         VALUES (?, ?, ?, ?);
     `;
 
-    const stmt = db.prepare(insertLoanQuery);
+    db.run(insertLoanQuery, [parsedUserId, parsedAmount, parsedWeeks, 'PENDING'], function (err) {
+        if (err) {
+            console.error('Error inserting loan request:', err.message);
+            return res.status(500).json({ message: 'Error creating loan request', error: err.message });
+        }
 
-    try {
-        stmt.run(parsedUserId, parsedAmount, parsedWeeks, 'PENDING');
-        
-        // Correctly access the last inserted ID
+        // Access last inserted ID using this.lastID with sqlite3
         res.status(201).json({
             message: 'Loan request created successfully',
-            loan_id: stmt.lastInsertRowid,  // Correctly use lastInsertRowid
+            loan_id: this.lastID,  // Access the last inserted row ID
         });
-    } catch (err) {
-        console.error('Error inserting loan request:', err.message);
-        return res.status(500).json({ message: 'Error creating loan request', error: err.message });
-    }
+    });
 });

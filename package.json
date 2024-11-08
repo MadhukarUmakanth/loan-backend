@@ -1,22 +1,21 @@
 {
   "name": "backend",
   "version": "1.0.0",
+  "description": "Backend for my project",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
+    "postinstall": "npm rebuild bcrypt --build-from-source",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
-    "bcrypt": "^5.1.1",
-    "better-sqlite3": "^11.5.0",
+    "bcryptjs": "^2.4.3",
+    "sqlite3": "^5.1.2",
     "cors": "^2.8.5",
     "express": "^4.21.1",
     "node-fetch": "^3.3.2"
-
-
-
   }
 }

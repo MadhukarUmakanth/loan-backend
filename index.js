@@ -24,9 +24,10 @@ const initializeDB = () => {
 
 initializeDB();
 
-// Start Server
-app.listen(5001, () => {
-    console.log("Server running at http://localhost:5001/");
+// Use PORT environment variable, default to 5001 if not set
+const PORT = process.env.PORT || 5001;
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running at http://localhost:${PORT}/`);
 });
 
 // Signup Route
@@ -109,9 +110,11 @@ app.post('/loans', (req, res) => {
 
     try {
         stmt.run(parsedUserId, parsedAmount, parsedWeeks, 'PENDING');
+        
+        // Correctly access the last inserted ID
         res.status(201).json({
             message: 'Loan request created successfully',
-            loan_id: this.lastID,  // last inserted ID
+            loan_id: stmt.lastInsertRowid,  // Correctly use lastInsertRowid
         });
     } catch (err) {
         console.error('Error inserting loan request:', err.message);
